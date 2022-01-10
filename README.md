@@ -45,31 +45,41 @@ keys: "f" will save result to file.
 "n" attribute name mode, each printed attribute value have attrbute name.
       
   getmore RNCE-SPB031:UtranCell,RNCE-SPB032:UtranCell qRxLevMin,maximumTransmissionPower,lac,cId,uarfcnUl,uarfcnDl,primaryScramblingCode s
+      
 will get seven parameters from all UtranCell in RNCE-SPB031 and RNCE-SPB032, strong mode.
 
   getmore IPInterface primaryIP_Address,primarySubNetMask ps
+      
 will get mask and IPaddress from all interfaces in all TCU, strongmode without terminal printout.
 
   getmore ExternalGsmCell lac,bcc,ncc,bcchFrequency,cellIdentity 
+      
 will get lac,ncc,bcc,cId from ExternalGsmCell in OSS.
       
   getmore M3uAssociation=iur remote nf
+      
 will get remoteIpAddress1,remoteIpAddress1,remotePortNumber from M3uAssociation with name, contained "iur" in OSS without attribute caption with file output.
 
   getmore EKT328:icell BCCHNO,BCC,NCC,LAC,CI
+      
 will get all BCCHNO,BCC,NCC,LAC,CI from all GSM internal cell on EKT328.
       
   getmore chgr band=1800,dchno
+      
 will get DCHNO for CHGR with BAND=1800 in OSS.
       
   getmore hardware type=mctr,mo=665
+      
 will find hardware data for MCTR in TG=665
       
   getmore RXOTG scgr,site,swveract,cell,chgr
+      
 will find data about RXOTG, including connected cell and software
       
   getmore SCGR mode,scgrss.scgr,pstuname
+      
 will get info about SCGR
       
   getmore TCU02:ARNE ipAddress
+      
 will get info about OaM ipaddress from all TCU
