@@ -44,9 +44,9 @@ keys: "f" will save result to file.
       
 "n" attribute name mode, each printed attribute value have attrbute name.
       
-    getmore RNCE-SPB031:UtranCell,RNCE-SPB032:UtranCell qRxLevMin,maximumTransmissionPower,lac,cId,uarfcnUl,uarfcnDl,primaryScramblingCode s
+    getmore RNC1:UtranCell,RNC2:UtranCell qRxLevMin,maximumTransmissionPower,lac,cId,uarfcnUl,uarfcnDl,primaryScramblingCode s
       
-will get seven parameters from all UtranCell in RNCE-SPB031 and RNCE-SPB032, strong mode.
+will get seven parameters from all UtranCell in RNC1 and RNC2, strong mode.
 
   getmore IPInterface primaryIP_Address,primarySubNetMask ps
       
@@ -60,9 +60,9 @@ will get lac,ncc,bcc,cId from ExternalGsmCell in OSS.
       
 will get remoteIpAddress1,remoteIpAddress1,remotePortNumber from M3uAssociation with name, contained "iur" in OSS without attribute caption with file output.
 
-    getmore EKT328:icell BCCHNO,BCC,NCC,LAC,CI
+    getmore BSC1:icell BCCHNO,BCC,NCC,LAC,CI
       
-will get all BCCHNO,BCC,NCC,LAC,CI from all GSM internal cell on EKT328.
+will get all BCCHNO,BCC,NCC,LAC,CI from all GSM internal cell on BSC1.
       
     getmore chgr band=1800,dchno
       
