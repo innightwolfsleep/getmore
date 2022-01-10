@@ -1,13 +1,22 @@
 # getmore
 getmore is GEt Managed Object Regular Expressions (desined for E/// OSS)
+
 extended help: getmore h 
+
 regular syntax help: getmore r 
-usage: getmore [Subnet1:]<MOtype1>[=MOfilter1](,...) <Attribute1>[=Value1](,...) [key] [fileDirectory]\n
+
+usage: getmore [Subnet1:]<MOtype1>[=MOfilter1](,...) <Attribute1>[=Value1](,...) [key] [fileDirectory]
+      
 where: <> is mandatory value, [] is optional value, () is optional repeat
+      
 Script parsing data from BCGtool,CNAI,BSM,BSM_HARDWARE; check data and output to terminal or file. Use standart OSS tools. 
+      
 --- Subnet - list of subnetworks (BSC/RNC/eNodeBarea/IPRANarea). Case-sensitive.
+      
 Recommended to use subnet filter for faster response. Accelerate working
+      
 --- MOtype - full name of parsed MO (UtranCell, IPInterface,ExternalGsmCell,icell,RXOTG...).
+      
 --- MOfilter - regular expression filters for MO name values. 
 --- Attribute - regular expression filter for attribute name. "all" reserved for output all attributes.
 --- Value - regular expression filter for attributes value. Use logical "and" between filters. Dont accelerate working.
