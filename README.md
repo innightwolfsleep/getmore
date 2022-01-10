@@ -28,19 +28,19 @@ Recommended to use subnet filter for faster response. Accelerate working
 --- fileDirectory - directory, where result file will be saved. By default file saved to current user directory. Use with "f" key.
 keys: "f" will save result to file.
       
-      "r" reverse attribute value comparison mode. It is mean, will be printed only MO where attribute value not equal to input value.
+"r" reverse attribute value comparison mode. It is mean, will be printed only MO where attribute value not equal to input value.
       
-      "R" reverse MOfilter comparison mode. It is mean, will be printed only MO with name not equal to MOfilter.
+"R" reverse MOfilter comparison mode. It is mean, will be printed only MO with name not equal to MOfilter.
       
-      "b" will not ignore case in regular expression.
+"b" will not ignore case in regular expression.
       
-      "p" will switch off printing result to terminal.
+"p" will switch off printing result to terminal.
       
-      "v" verbose information mode, show additional info.
+"v" verbose information mode, show additional info.
+
+"m" mute mode, output only result.  
       
-      "m" mute mode, output only result.  
+"c" CSV mode, output with ";" as delimeter.  
       
-      "c" CSV mode, output with ";" as delimeter.  
-      
-      "n" attribute name mode, each printed attribute value have attrbute name.
+"n" attribute name mode, each printed attribute value have attrbute name.
       
