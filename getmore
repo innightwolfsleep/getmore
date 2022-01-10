@@ -1,0 +1,948 @@
+#!/usr/bin/python
+# getmore by ilya shevchenko - getmore is GEt Managed Object Regular Expressions
+import os, datetime, sys, subprocess, re
+
+ossMainSubnetwork = 'ONRM_ROOT_MO_R'
+
+
+def getMoAttributeARNE(parsingMO, attributes, parsingDN='', quietMode=1, maindir=''):
+    """function get XML data from bcgtool.sh, parsing and return for next use (like amos get for many object)
+        need import os,datetime,sys,subprocess
+        return list separated by \t
+    """
+    moDataList = []
+    # make vars,get args
+    elemenCounter = 0
+    if quietMode > 1:
+        print("GET BCG DATA >>>\n")
+    if maindir == '':
+        maindir = os.path.dirname(os.path.abspath(__file__))
+    t = str(datetime.datetime.now())
+    t = ((t.split(".")[0]).replace(' ', '_')).replace(':', '') + str(os.getlogin())
+    attributeslist = attributes.split(',')
+    # ---------------------
+    # get data
+    parsingMOnameList = ''
+    if parsingMO.find('=') > -1:
+        parsingMOnameList = parsingMOnameList + 'vsData' + parsingMO.split('=')[0] + ','
+    else:
+        parsingMOnameList = parsingMOnameList + 'vsData' + parsingMO + ','
+    parsingMOnameList = parsingMOnameList[0:len(parsingMOnameList) - 1]
+    resultFileName = maindir + '/tempFile_getMO_ARNE' + t + '.xml'
+    cmd = '/opt/ericsson/arne/bin/export.sh -f ' + resultFileName + ' -o -noTss'
+    if quietMode > 0:
+        print('Command:\n' + cmd + '\n')
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+    proc_stdout = process.communicate()[0].strip()
+    if quietMode > 1:
+        print('Answer:\n' + proc_stdout + '\n')
+    # Read from BCG
+    if os.path.exists(resultFileName):
+        # ---------------------
+        # PARSING BEGIN!
+        MOfile = open(resultFileName, 'r')
+        lines = MOfile.readlines()
+        MOfile.close()
+        findedAttr = ''
+        moName = ''
+        if parsingMO.find('=') > -1:
+            nextMO = parsingMO.split('=')[0]
+            moNameFilterList = parsingMO.split('=')[1]
+        else:
+            nextMO = parsingMO
+            moNameFilterList = ''
+        nodeName = ''
+        subNetworkName = ''
+        if quietMode > 1:
+            print('PARSING "' + nextMO + '" BEGIN >>>\n')
+        catchMO = False
+        # parsing cycle. cathcMO is True when we read need MO
+        for i in lines:
+            # check end of MO
+            if i.find('</ManagedElement>') != -1 and catchMO == True:
+                if subNetworkName.lower().find(parsingDN.lower()) > -1 or parsingDN == '':
+                    if subNetworkName == nodeName:
+                        moDataList.append(
+                            '_Node=' + subNetworkName + '\t' + '_' + nextMO + '=' + moName + '\t' + findedAttr)
+                    elif nodeName == '':
+                        moDataList.append(
+                            '_subNet=' + subNetworkName + '\t' + '_' + nextMO + '=' + moName + '\t' + findedAttr)
+                    else:
+                        moDataList.append(
+                            '_subNet=' + subNetworkName + '\t' + '_Node=' + nodeName + '\t' + '_' + nextMO + '=' + moName + '\t' + findedAttr)
+                findedAttr = ''
+                catchMO = False
+            # check attribute
+            if catchMO == True:
+                if i.find('="') > -1:
+                    newValue = i.split('"')[1]
+                    findedAttr = findedAttr + '\t' + i.split('<')[1].split(' ')[0] + '=' + newValue
+            # check subnet(type)
+            if i.find('ManagedElement sourceType') > -1:
+                subNetworkName = i.split('"')[1]  # check mo name
+            if i.find('ManagedElementId') > -1 and catchMO == False:
+                catchMO = True
+                moName = i.split('"')[1]
+            # check mo name value by filter
+    else:
+        if quietMode > 0:
+            print('Answer:\n' + proc_stdout + '\n')
+            print('>>> WRONG INPUT DATA - cant find any MO with name "' + parsingMO + '"')
+            print('>>> MAYBE BECAUSE YOU NOT IN MASTERHOST MODE?')
+            print('>>> CONNECT TO MASTERHOST FIRST:\n')
+            print('telnet mashost        \n')
+    # clear and return
+    if os.path.exists(resultFileName):
+        os.remove(resultFileName)
+    if quietMode > 1:
+        print(">>> PARSING END\n")
+    return moDataList
+
+
+def getMoAttributeBSM(parsingMO, attributes, parsingDN='', quietMode=1, maindir=''):
+    """function get BSM data from bsm_hw_export, parsing and return for next use (like amos get for many object)
+        need import os,datetime,sys,subprocess
+        return list separated by \t
+    """
+    moDataList = []
+    # make vars,get args
+    t = str(datetime.datetime.now())
+    t = ((t.split(".")[0]).replace(' ', '_')).replace(':', '')
+    elemenCounter = 0
+    if quietMode > 1:
+        print("GET BSM_HW DATA >>>\n")
+    # ---------------------
+    # get data
+    if parsingMO.find('=') > -1:
+        nameFilter = parsingMO.split('=')[1]
+        parsingMO = parsingMO.split('=')[0].upper()
+    else:
+        nameFilter = ''
+        parsingMO = parsingMO.upper()
+    if parsingDN != '':
+        parsingDNword = ',bsc=' + parsingDN
+    else:
+        parsingDNword = ''
+    # make filter filterFile
+    filterFileName = maindir + '/tempFile_getMO_BSMfilter_' + t + '.txt'
+    try:
+        attributesFileList = 'bsc,mo,*'
+        if parsingMO == 'TG12':
+            attributesFileList = 'bsc,mo,infosource,state,bts,blstate,blo,bla,intercnt,fcode1a,fcode1b,fcode2a,extfcode1b,extfcode2b,repl,btsswver,comb,rsite,fhop,model,swveract,tgcoord,almask.tgcf,almask.perm,almask.lom,almask.lmt,almask.loop,almask.int1,almask.oml,almask.abis,almask.conq,almask.sync,almask.int2,almask.ext1,almask.ext2,almask.forl,almask.opera,almask.mains,almask.all,almask.sigol,almask.abisol,almask.abisf,almask.pagol,almask.rfperf,almask.limsc,almask.alsupp,almask.tp,almask.timsrv,almask.psumf,almask.ccinc,alcotim,swverrepl,sigdel,traco,confact,cgconnections.cell,cgconnections.chgr,confmd,alsit,abiss.dev,abiss.dcp,abiss.abispath64k,abiss.abisconfigs.sc,abiss.abisconfigs.apusage,abiss.abisconfigs.apstate,abiss.abisconfigs.tei,ahop,bsswanted,cascap,omlf1cap,omlf2cap,rslf1cap,rslf2cap,abisalloc,clusterid,abis64kthr,ftxaddrcap,dhraabisthr,dfrmaabisthr,damrcr,damrredabisthr,tmode,scgr,sdhraabisthr,sdfrmaabisthr,sdamrredabisthr,packalg,pta,jbsdl,num64kdev,numres64kdev,dhrmaabisthr,sdhrmaabisthr,thresholds.ahprl,thresholds.dhraabisthr,thresholds.damrredabisthr,thresholds.sdhraabisthr,thresholds.sdamrredabisthr,thresholds.dhraabisthrwb,thresholds.sdhraabisthrwb,exaltim,fftad,btsfftad,btsahop,psups,btspsups,pal,jbpta,cltginst,tsps,btstsps,dhraabisthrwb,sdhraabisthrwb,ccchcmd,aisgret,aisgtma,cstma,btsaisgret,btsaisgtma,btscstma,sclusterid,rcasc,btsrcasc,aligntype,btssoftsync,eatcsrc,syncstatus,timetosync,adjval,adjtime,adjdate,btsmeid,sourcetype'
+        if parsingMO == 'BSC':
+            attributesFileList = 'bsc,infosource,type,version,optionalFeatures.name,optionalFeatures.value,timeStamp.emg.date,timeStamp.emg.time,timeStamp.tg.date,timeStamp.tg.time,timeStamp.ru.date,timeStamp.ru.time,timeStamp.cell.date,timeStamp.cell.time,scgrss.scgr,scgrss.mode,scgrss.pstuname,scgrss.mbwdl,scgrss.mbwul,scgrss.jbsul,scgrss.ldel,scgrss.ipov,scgrss.sclists.sc,scgrss.sclists.scdev,scgrss.sclists.scdev1,scgrss.sclists.dcp,scgrss.sclists.numdev,scgrss.sclists.scstate,scgrss.tgidentity,scgrss.hostid,scgrss.sapi,scgrss.lbg,scgrss.conn,stns.stnname,stns.stnversion,stns.stntype,stns.stnfdn,pstus.pstuname,pstus.stnname,pstus.inBsc,concboardalarm,concboardcease,conclinkalarm,conclinkcease,defaultsyncsrc,exmasterres,fcmaxnoptglg01,fcmaxnoptglg12,fcmaxnoptgug12,mccsupport,numtraloads,rectime,reccap,regpointprocld,tfoconfigtra,tfostatus,homtd,tphstatus,tradroplevel,trxtautoinitime,trxtautothrshld,tslooptest,ttalong,ttanormal,maxnumtrx,gsconn,capacitylocks.clname,capacitylocks.clmax,capacitylocks.clabsuse,bssrelease'
+        if parsingMO == 'SCGR':
+            attributesFileList = 'bsc,scgrss.scgr,scgrss.mode,scgrss.pstuname,scgrss.mbwdl,scgrss.mbwul,scgrss.jbsul,scgrss.ldel,scgrss.ipov,scgrss.sclists.sc,scgrss.sclists.scdev,scgrss.sclists.scdev1,scgrss.sclists.dcp,scgrss.sclists.numdev,scgrss.sclists.scstate,scgrss.tgidentity,scgrss.hostid,scgrss.sapi,scgrss.lbg,scgrss.conn'
+            parsingMO = 'BSC'
+        if parsingMO == 'PSTU':
+            attributesFileList = 'bsc,pstus.pstuname,pstus.stnname,pstus.inBsc'
+            parsingMO = 'BSC'
+        filterFile = open(filterFileName, 'a')
+        filterFileWord = '!' + parsingMO + ',Species,' + attributesFileList + ' Species=' + parsingMO + parsingDNword
+        filterFile.write(filterFileWord)
+        filterFile.close()
+    except:
+        if quietMode > 0:
+            print(
+                        'Cant write filterFile! Directory not exist, no write permissions or somethig else...\n' + filterFileName)
+    # bsm command
+    resultFileName = maindir + '/tempFile_getMO_BSMresult_' + t + '.txt'
+    cmd = 'bsm_export < ' + filterFileName + ' > ' + resultFileName
+    if quietMode > 0:
+        print('Filter:\n' + filterFileWord)
+        print('Command:\n' + cmd + '\n')
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+    proc_stdout = process.communicate()[0].strip()
+    # Read from resultFileName
+    if os.path.exists(resultFileName):
+        if os.path.getsize(resultFileName) > 1:
+            # ---------------------
+            # PARSING BEGIN!
+            MOfile = open(resultFileName, 'r')
+            lines = MOfile.readlines()
+            MOfile.close()
+            findedAttr = {}
+            moName = ''
+            oldString = ''
+            if quietMode > 1:
+                print('PARSING "' + attributes + '" BEGIN >>>\n')
+            catchMO = False
+            # parsing cycle. cathcMO is True when we read need MO
+            collumCaption = lines[0][1:len(lines[0])].split(',')
+            if len(lines) > 0:
+                lines.pop(0)
+            for i in lines:
+                string = i.split(',')
+                if string[0][0:1] != '#' and len(collumCaption) == len(string):
+                    findedString = '_subNet=' + string[2].replace('\n', '').replace('"', '') + '\t_mo=' + string[
+                        3].replace('\n', '').replace('"', '')
+                    for a in attributes.split(','):
+                        if a.find('=') > -1:
+                            attributeName = a.split('=')[0]
+                        else:
+                            attributeName = a
+                        for x in range(len(collumCaption)):
+                            findedString = findedString + '\t' + collumCaption[x].replace('\n', '') + '=' + string[
+                                x].replace('\n', '').replace('"', '')
+                    if findedString != oldString:
+                        moDataList.append(findedString)
+                        oldString = findedString
+                else:
+                    if quietMode > 0:
+                        print('Error!\n')
+                    if os.path.exists(filterFileName):
+                        os.remove(filterFileName)
+                    if os.path.exists(resultFileName):
+                        os.remove(resultFileName)
+                    return 'NULL'
+
+    if os.path.exists(filterFileName):
+        os.remove(filterFileName)
+    if os.path.exists(resultFileName):
+        os.remove(resultFileName)
+    if quietMode > 1:
+        print(">>> PARSING END\n")
+    return moDataList
+
+
+def getMoAttributeBSM_HW(parsingMOname, attributes, parsingDN='', quietMode=1, maindir=''):
+    """function get BSM data from bsm_hw_export, parsing and return for next use (like amos get for many object)
+        need import os,datetime,sys,subprocess
+        return list separated by \t
+    """
+    moDataList = []
+    # make vars,get args
+    elemenCounter = 0
+    if quietMode > 1:
+        print("GET BSM_HW DATA >>>\n")
+    for parsingMO in parsingMOname.split(','):
+        attributeslist = attributes.split(',')
+        # ---------------------
+        # get data
+        if parsingMO.find('=') > -1:
+            nameFilter = parsingMO.split('=')[1]
+            parsingMO = parsingMO.split('=')[0]
+        else:
+            nameFilter = ''
+        if parsingDN != '':
+            cmd = 'bsm_hw_export  -c ";" -f \'dn like "%bsc=""' + parsingDN + '""%"\''
+        else:
+            cmd = 'bsm_hw_export  -c ";"'
+        if quietMode > 0:
+            print('Command:\n' + cmd + '\n')
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+        proc_stdout = process.communicate()[0].strip()
+        # Reading and parsing
+        oldFindedObject = ''
+        findedString = ''
+        for i in proc_stdout.split('\n'):
+            string = i.split(';')
+            if len(string) > 7:
+                if string[0].lower().find('bsc="' + parsingDN.lower() + '"') or parsingDN == '':
+                    if oldFindedObject != string[0]:
+                        findedIsValid = True
+                        findedString = '_subNet=' + string[0].split(',')[1].replace('"', '').split('=')[
+                            1] + ' ' + '_site=' + string[0].split(',')[2].replace('"', '').split('=')[1]
+                        findedString = findedString + '\ttype=' + string[2]
+                        findedString = findedString + '\tserial=' + string[3]
+                        findedString = findedString + '\tproduct=' + string[4]
+                        findedString = findedString + '\tMO=' + string[7]
+                        if findedIsValid == True:
+                            oldFindedObject = string[0]
+                            moDataList.append(findedString)
+                    else:
+                        moDataList[-1] = moDataList[-1] + ' ' + string[7]
+
+    if quietMode > 1:
+        print(">>> PARSING END\n")
+    return moDataList
+
+
+def getMoAttributeCNA(parsingMOnameList, attributes, parsingDN='', quietMode=1, maindir=''):
+    """function get data from cnai, parsing and return for next use (like amos get for many object)
+        need import os,datetime,sys,subprocess
+        return list separated by \t
+    """
+    moDataList = []
+    elemenCounter = 0
+    # make vars,get args
+    if maindir == '':
+        maindir = os.path.dirname(os.path.abspath(__file__))
+    attributeslist = attributes.split(',')
+    if quietMode > 1:
+        print("GET CNA DATA >>>\n")
+    # ---------------------
+    # get data
+    for parsingMOname in parsingMOnameList.split(','):
+        t = str(datetime.datetime.now())
+        t = ((t.split(".")[0]).replace(' ', '_')).replace(':', '') + str(os.getlogin())
+        if parsingMOname.find('=') > -1:
+            commandheart = parsingMOname.lower().split('=')[0]
+            parsingMOname = parsingMOname.split('=')[0]
+        else:
+            commandheart = parsingMOname.lower()
+        if len(parsingDN) > 0:
+            commandheart = commandheart + '=' + parsingDN
+            star1MOnameList = ['INTERNAL_CELL', 'internal_cell', 'ICELL', 'icell', 'IC', 'ic', 'UTRAN_CELL',
+                               'utran_cell', 'UCELL', 'ucell', 'INNER_CELL', 'inner_cell', 'INNER', 'inner',
+                               'OUTER_CELL', 'outer_cell', 'OCELL', 'ocell', 'OUTER', 'outer', 'SITE', 'site', 'TG',
+                               'tg', 'OVERLAID_CELL', 'overlaid_cell', 'OVERLAID', 'overlaid', 'OLCELL', 'olcell', 'OL',
+                               'ol', 'EXTERNAL_CELL', 'external_cell', 'ECELL', 'ecell', 'EC', 'ec',
+                               'UTRAN_EXTERNAL_CELL', 'utran_external_cell', 'UECELL', 'uecell', 'UEC', 'uec']
+            star2MOnameList = ['CHANNEL_GROUP', 'channel_group', 'CHGR', 'chgr']
+            star3MOnameList = ['UTRAN_NREL', 'utran_nrel', 'UNREL', 'unrel', 'NREL', 'nrel']
+            if len(list(filter(lambda x: parsingMOname.lower().find(x) == 0,
+                               star1MOnameList))) > 0: commandheart = commandheart + ':\*'
+            if len(list(filter(lambda x: parsingMOname.lower().find(x) == 0,
+                               star2MOnameList))) > 0: commandheart = commandheart + ':\*:\*'
+            if len(list(filter(lambda x: parsingMOname.lower().find(x) == 0,
+                               star3MOnameList))) > 0: commandheart = commandheart + ':\*:\*:\*'
+        resultFileName = maindir + '/tempFile_getMO_CNA' + t + '.txt'
+        cmd = 'cnai export valid -i ' + commandheart + ' > ' + resultFileName
+        if quietMode > 0:
+            print('Command:\n' + cmd + '\n')
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+        proc_stdout = process.communicate()[0].strip()
+        # if quietMode>1:
+        #    print('Answer:\n'+proc_stdout+'\n')
+        # Read from BCG
+        if os.path.exists(resultFileName):
+            # ---------------------
+            # PARSING BEGIN!
+            MOfile = open(resultFileName, 'r')
+            lines = MOfile.readlines()
+            MOfile.close()
+            findedAttr = ''
+            moName = ''
+            nodeName = ''
+            valueFilterPassedCount = 0
+            if quietMode > 1:
+                print('PARSING "' + str(parsingMOname) + '" BEGIN >>> \n')
+            catchMO = False
+            # parsing cycle. cathcMO is True when we read need MO
+            for i in lines:
+                # check end of MO
+                if i[0:1] == '.' and catchMO == True and len(findedAttr) > 0:
+                    if (moName.find(':') > -1):
+                        moDataList.append('_subNet=' + moName.split(':')[0] + '\t' + '_' + parsingMOname + '=' + moName[
+                                                                                                                 moName.find(
+                                                                                                                     ':') + 1:len(
+                                                                                                                     moName)])
+                    else:
+                        moDataList.append(
+                            '_subNet=' + moName.split(':')[0] + '\t' + '_' + parsingMOname + '=' + moName.split(':')[0])
+                    moDataList[-1] = moDataList[-1] + findedAttr
+                    findedAttr = ''
+                    catchMO = False
+                    valueFilterPassedCount = 0
+                # check attribute
+                if catchMO == True and i.find('=') > -1:
+                    newValue = i.replace('\n', '').replace('\r', '')
+                    findedAttr = findedAttr + '\t' + newValue
+                # get mo name
+                if i.find('.set ') != -1:
+                    moName = i.split(' ')[1].replace('\n', '').replace('\r', '')
+                    catchMO = True
+
+        else:
+            if quietMode > 0:
+                print('Answer:\n' + proc_stdout + '\n')
+                print('>>> WRONG INPUT DATA - cant find any MO with name "' + parsingMOname + '"\n')
+        # clear and return
+        if os.path.exists(resultFileName):
+            os.remove(resultFileName)
+    if quietMode > 1:
+        print(">>> PARSING END\n")
+    return moDataList
+
+
+def getMoAttributeBCG(parsingMO, attributes, parsingDN='', quietMode=1, maindir=''):
+    """function get XML data from bcgtool.sh, parsing and return for next use (like amos get for many object)
+        need import os,datetime,sys,subprocess
+        return list separated by \t
+    """
+    moDataList = []
+    # make vars,get args
+    elemenCounter = 0
+    if quietMode > 1:
+        print("GET BCG DATA >>>\n")
+    if maindir == '':
+        maindir = os.path.dirname(os.path.abspath(__file__))
+    t = str(datetime.datetime.now())
+    t = ((t.split(".")[0]).replace(' ', '_')).replace(':', '') + str(os.getlogin())
+    attributeslist = attributes.split(',')
+    # ---------------------
+    # get data
+    parsingMOnameList = ''
+    if parsingMO.find('=') > -1:
+        parsingMOnameList = parsingMOnameList + 'vsData' + parsingMO.split('=')[0] + ','
+    else:
+        parsingMOnameList = parsingMOnameList + 'vsData' + parsingMO + ','
+    parsingMOnameList = parsingMOnameList[0:len(parsingMOnameList) - 1]
+    resultFileName = maindir + '/tempFile_getMO_BCG' + t + '.xml'
+    if parsingDN == '':
+        cmd = '/opt/ericsson/nms_umts_wran_bcg/bin/bcgtool.sh -e ' + resultFileName + ' -d :' + parsingMOnameList
+    else:
+        cmd = '/opt/ericsson/nms_umts_wran_bcg/bin/bcgtool.sh -e ' + resultFileName + ' -d :' + parsingMOnameList + ' -n ' + parsingDN
+    if quietMode > 0:
+        print('Command:\n' + cmd + '\n')
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+    proc_stdout = process.communicate()[0].strip()
+    if quietMode > 1:
+        print('Answer:\n' + proc_stdout + '\n')
+    # Read from BCG
+    if os.path.exists(resultFileName):
+        # ---------------------
+        # PARSING BEGIN!
+        MOfile = open(resultFileName, 'r')
+        lines = MOfile.readlines()
+        MOfile.close()
+        findedAttr = ''
+        moName = ''
+        if parsingMO.find('=') > -1:
+            nextMO = parsingMO.split('=')[0]
+            moNameFilterList = parsingMO.split('=')[1]
+        else:
+            nextMO = parsingMO
+            moNameFilterList = ''
+        nodeName = ''
+        subNetworkName = ''
+        fdnArray = []
+        LayerLevel = 0
+        if quietMode > 1:
+            print('PARSING "' + nextMO + '" BEGIN >>>\n')
+        catchMO = False
+        # parsing cycle. cathcMO is True when we read need MO
+        for i in lines:
+            # check end of MO
+            if i.find('</xn:VsDataContainer>') != -1 and catchMO == True:
+                moName = fdnArray[-1]
+                subNetworkName = ''
+                for fdn in fdnArray:
+                    subNetworkName = subNetworkName + ',' + fdn
+                subNetworkName = subNetworkName[1:]
+                moDataList.append(
+                    '_Subnetwork=' + subNetworkName + '\t' + '_' + nextMO + '=' + moName + '\t' + findedAttr)
+                findedAttr = ''
+                catchMO = False
+            # check attribute
+            if catchMO == True:
+                if i.find(':') > -1 and i.find('/') > -1 and i.find('vsData') == -1:
+                    newValue = (i.split('<'))[1].split('>')[0].split(':')[1] + '=' + (i.split('<'))[1].split('>')[
+                        1].replace('\n', ' ')
+                    findedAttr = findedAttr + '\t' + newValue
+            # find one deep level
+            if re.search('<..:', i) != None and re.search('/>', i) == None:
+                LayerLevel = LayerLevel + 1
+                if i.find(' id=') > -1:
+                    fdnArray.append(i.split('"')[1])
+                else:
+                    fdnArray.append('')
+                # print '+',catchMO,LayerLevel,fdnArray
+                # print i
+            # leave one deep level
+            if re.search('</..:', i) != None:
+                LayerLevel = LayerLevel - 1
+                fdnArray.pop()
+                # print '-',catchMO,LayerLevel,fdnArray,
+            # check mo name
+            if i.find(':') > -1 and catchMO == False:
+                if i.find(':') > -1 and i.find(' id=') > -1:
+                    if (i.lower().split(':')[1]).split(' ')[0].find(nextMO.lower()) > -1:
+                        catchMO = True
+                        moName = i.split('"')[1]
+                if i.lower().find('<xn:vsdatatype>vsdata') > -1 and i.lower().find(
+                        '</xn:vsdatatype>') > -1 and i.lower().find(nextMO.lower()) != -1:
+                    catchMO = True
+                    moName = fdnArray[-1]
+            # check mo name value by filter
+    else:
+        if quietMode > 0:
+            print('Answer:\n' + proc_stdout + '\n')
+            print('>>> WRONG INPUT DATA - cant find any MO with name "' + parsingMO + '"\n')
+    # clear and return
+    if os.path.exists(resultFileName):
+        os.remove(resultFileName)
+    if quietMode > 1:
+        print(">>> PARSING END\n")
+    print moDataList[0]
+    return moDataList
+
+
+def getMoAttributeFilter(moDataList, moName, moAttr, delimeter='\t', searchMode='and', attribureCaptionMode=True,
+                         caseIgnore=True, notEqualMode=False, notEqualName=False):
+    """ need import re
+        return list \t
+    """
+    allMode = False
+    searchingAttributes = []
+    searchingValues = []
+    checkingValues = []
+    subnetName = ''
+    nodeName = ''
+    oldCaptionList = ''
+    resultMoDataList = []
+    elemenCounter = 0
+
+    if moName.find('=') > -1:
+        moValidId = moName.split('=')[1]
+    else:
+        moValidId = None
+
+    if moName.find(':') > -1: moName = moName.split(':')[1]
+    moName = moName.split('=')[0]
+    for a in moAttr.split(','):
+        if (a.split('=')[0].lower() == 'all'):
+            searchingAttributes.append('.')
+        else:
+            searchingAttributes.append(a.split('=')[0])
+        if a.find('=') > -1:
+            searchingValues.append(a.split('=')[1])
+            checkingValues.append('check')
+        else:
+            searchingValues.append(None)
+            checkingValues.append(None)
+    # data search cycle
+    oldMOresultString = ''
+    for i in moDataList:
+        for x in range(len(searchingValues)): checkingValues[x] = None
+        checkArray = []
+        validationIdPassed = True
+        findedCaptionArray = []
+        findedAttributeArray = []
+        array = str(i).split('\t')
+        for a in array:
+            # if subnet or node name finded, add to list:
+            if a != '':
+                if a[0] == '_':
+                    findedCaptionArray.append(a[1:])
+                # if mo name finded - make check and add to list:
+                if a.split('=')[0] == '_' + moName and len(a.split('=')) > 1:
+                    if moValidId != None:
+                        if notEqualName == False:
+                            if re.search(moValidId, a.split('=')[1],
+                                         re.IGNORECASE) == None if caseIgnore == True else re.search(moValidId,
+                                                                                                     a.split('=')[
+                                                                                                         1]) == None:
+                                validationIdPassed = False
+                        else:
+                            if re.search(moValidId, a.split('=')[1],
+                                         re.IGNORECASE) != None if caseIgnore == True else re.search(moValidId,
+                                                                                                     a.split('=')[
+                                                                                                         1]) != None:
+                                validationIdPassed = False
+                # make attribute check
+                if validationIdPassed == True:
+                    for x in range(len(searchingAttributes)):
+                        if re.search(searchingAttributes[x], a.split('=')[0], re.IGNORECASE) != None and a[
+                            0] != '_' if caseIgnore == True else re.search(searchingAttributes[x],
+                                                                           a.split('=')[0]) != None and a[0] != '_':
+                            findedAttributeArray.append(a)
+                            if searchingValues[x] != None:
+                                if a.find('=') > -1:
+                                    if len(a.split('=')[1]) > 0:
+                                        # if value is valid - true, not valid - false, not valid but was checked true before - true
+                                        if notEqualMode == False:
+                                            if re.search(searchingValues[x], a.split('=')[1],
+                                                         re.IGNORECASE) != None if caseIgnore == True else re.search(
+                                                    searchingValues[x], a.split('=')[1]) != None:
+                                                checkingValues[x] = True
+                                            elif checkingValues[x] != True:
+                                                checkingValues[x] = False
+                                        else:
+                                            if re.search(searchingValues[x], a.split('=')[1],
+                                                         re.IGNORECASE) == None if caseIgnore == True else re.search(
+                                                    searchingValues[x], a.split('=')[1]) == None:
+                                                checkingValues[x] = True
+                                            elif checkingValues[x] != True:
+                                                checkingValues[x] = False
+        if validationIdPassed == True and len(findedAttributeArray) > 0:
+            checkingTrueCounter = 0
+            checkingFalseCounter = 0
+            oldAttribute = ''
+            for c in checkingValues:
+                if c == True: checkingTrueCounter = checkingTrueCounter + 1
+                if c == False: checkingFalseCounter = checkingFalseCounter + 1
+            # mode and
+            if searchMode == 'and' and checkingFalseCounter == 0:
+                findedString = ''
+                currentCaptionList = ''
+                # findedAttributeArray.sort()
+                # table output mode
+                if attribureCaptionMode == True:
+                    # make result string from caption and attribute value, make captions list
+                    for s in findedCaptionArray:
+                        findedString = findedString + s.split('=')[1] + delimeter
+                        currentCaptionList = currentCaptionList + s.split('=')[0] + delimeter
+                    for s in findedAttributeArray:
+                        if oldAttribute != s.split('=')[0]:
+                            findedString = findedString + s[s.find('=') + 1:] + delimeter
+                            currentCaptionList = currentCaptionList + s.split('=')[0] + delimeter
+                            oldAttribute = s.split('=')[0]
+                        else:
+                            findedString = findedString[0:len(findedString) - len(delimeter)] + ',' + s.split('=')[
+                                1] + delimeter
+                    # if caption list is new - add in resultArray
+                    if currentCaptionList != oldCaptionList:
+                        resultMoDataList.append('')
+                        resultMoDataList.append(currentCaptionList)
+                        oldCaptionList = currentCaptionList
+                # list output mode
+                if attribureCaptionMode == False:
+                    for s in findedCaptionArray:
+                        findedString = findedString + s + delimeter
+                    for s in findedAttributeArray:
+                        if oldAttribute != s.split('=')[0]:
+                            findedString = findedString + s + delimeter
+                            oldAttribute = s.split('=')[0]
+                        else:
+                            findedString = findedString[0:len(findedString) - len(delimeter)] + ',' + s + delimeter
+                # add in result array new string, if new string isnt copy of previous
+                if oldMOresultString != findedString:
+                    resultMoDataList.append(findedString)
+                    elemenCounter = elemenCounter + 1
+                    oldMOresultString = findedString
+            # mode or
+            if searchMode == 'or' and checkingTrueCounter > 0:
+                findedString = ''
+                currentCaptionList = ''
+                # findedAttributeArray.sort()
+                # table output mode
+                if attribureCaptionMode == True:
+                    # make result string from caption and attribute value, make captions list
+                    for s in findedCaptionArray:
+                        findedString = findedString + s.split('=')[1] + delimeter
+                        currentCaptionList = currentCaptionList + s.split('=')[0] + delimeter
+                    for s in findedAttributeArray:
+                        if oldAttribute != s.split('=')[0]:
+                            findedString = findedString + s[s.find('=') + 1:] + delimeter
+                            currentCaptionList = currentCaptionList + s.split('=')[0] + delimeter
+                            oldAttribute = s.split('=')[0]
+                        else:
+                            findedString = findedString[0:len(findedString) - len(delimeter)] + ',' + s.split('=')[
+                                1] + delimeter
+                    # if caption list is new - add in resultArray
+                    if currentCaptionList != oldCaptionList:
+                        resultMoDataList.append('')
+                        resultMoDataList.append(currentCaptionList)
+                        oldCaptionList = currentCaptionList
+                # list output mode
+                if attribureCaptionMode == False:
+                    for s in findedCaptionArray:
+                        findedString = findedString + s + delimeter
+                    for s in findedAttributeArray:
+                        if oldAttribute != s.split('=')[0]:
+                            findedString = findedString + s + delimeter
+                            oldAttribute = s.split('=')[0]
+                        else:
+                            findedString = findedString[0:len(findedString) - len(delimeter)] + ',' + s + delimeter
+                # add in result array new string, if new string isnt copy of previous
+                if oldMOresultString != findedString:
+                    resultMoDataList.append(findedString)
+                    elemenCounter = elemenCounter + 1
+                    oldMOresultString = findedString
+
+    return resultMoDataList, elemenCounter
+
+
+def getMO(ossMainSubnetwork='ONRM_ROOT_MO_R'):
+    # main function for getmoattribute.py
+    # make vars,get args
+    t = str(datetime.datetime.now())
+    t = ((t.split(".")[0]).replace(' ', '_')).replace(':', '')
+    from_cli = sys.argv
+    keys = ''
+    resultDataList = []
+
+    if len(from_cli) > 1:
+        if from_cli[1].lower() == 'h':
+            getMO_help('e')
+            return 'help'
+        if from_cli[1].lower() == 'r':
+            getMO_help('r')
+            return 'help'
+    if len(from_cli) > 3:
+        keys = from_cli[3]
+    if len(from_cli) > 2:
+        First = from_cli[1]
+        Second = from_cli[2]
+        # ---------------------
+        # argumenst convert to var
+        if keys.find('b') > -1:
+            caseIgnore = False
+        else:
+            caseIgnore = True
+        if keys.find('f') > -1:
+            saveMode = True
+        else:
+            saveMode = False
+        if keys.find('r') > -1:
+            notEqualMode = True
+        else:
+            notEqualMode = False
+        if keys.find('R') > -1:
+            notEqualName = True
+        else:
+            notEqualName = False
+        if keys.find('n') > -1:
+            attribureCaptionMode = False
+        else:
+            attribureCaptionMode = True
+        if keys.find('p') > -1:
+            noPrintMode = True
+        else:
+            noPrintMode = False
+        if keys.find('c') > -1:
+            delimeter = ';'
+        else:
+            delimeter = '\t'
+        quietMode = 1
+        if keys.find('v') > -1:
+            quietMode = 2
+        if keys.find('m') > -1:
+            quietMode = 0
+
+        # check temp dir
+        try:
+            maindir = '/home/' + os.getlogin() + '/tempfile_getMO'
+            if os.path.exists(maindir + '/') == False:
+                os.mkdir(maindir)
+            if os.path.exists(maindir + '/') == True:
+                os.chmod(maindir, 0777)
+        except:
+            if quietMode > 0:
+                print('Cant create temporary directory...\n' + maindir)
+            return False
+
+        # begining!
+        moDataList = []
+        elemenCounter = 0
+        for moName in First.split(','):
+            subnetworkList = ''
+            if moName.find(':') > -1:
+                if moName.find(':') < moName.find('=') or moName.find('=') == -1:
+                    subnetworkList = moName.split(':')[0]
+                    moName = moName.split(':')[1]
+                    if subnetworkList.find('#') > -1:
+                        ossMainSubnetwork = subnetworkList.split('#')[0]
+                        subnetworkList = subnetworkList.split('#')[1]
+
+            cnaMOnameList = ['BSC', 'bsc', 'MSC', 'msc', 'RNC', 'rnc', 'FOREIGN_CELL', 'foreign_cell', 'FCELL', 'fcell',
+                             'FC', 'fc', 'INTERNAL_CELL', 'internal_cell', 'ICELL', 'icell', 'IC', 'ic', 'UTRAN_CELL',
+                             'utran_cell', 'UCELL', 'ucell', 'UC', 'uc', 'INNER_CELL', 'inner_cell', 'INNER', 'inner',
+                             'OUTER_CELL', 'outer_cell', 'OCELL', 'ocell', 'OUTER', 'outer', 'PRIORITY_PROFILE',
+                             'priority_profile', 'PP', 'pp', 'SITE', 'site', 'TG', 'tg', 'OVERLAID_CELL',
+                             'overlaid_cell', 'OVERLAID', 'overlaid', 'OLCELL', 'olcell', 'OL', 'ol', 'CHANNEL_GROUP',
+                             'channel_group', 'CHGR', 'chgr', 'NREL', 'nrel', 'UTRAN_NREL', 'utran_nrel', 'UNREL',
+                             'unrel', 'EXTERNAL_CELL', 'external_cell', 'ECELL', 'ecell', 'EC', 'ec',
+                             'UTRAN_EXTERNAL_CELL', 'utran_external_cell', 'UECELL', 'uecell', 'UEC', 'uec']
+            bsmMOnameDict = {'BSMBSC': 'BSC', 'PSTU': 'PSTU', 'SCGR': 'SCGR', 'BSCCAP': 'BSCCAP', 'RXOTX': 'TX12',
+                             'RXOTS': 'TS12', 'RXOTRX': 'TRX12', 'RXOTG': 'TG12', 'RXOTF': 'TF12', 'RXORX': 'RX12',
+                             'RXOMCTR': 'MCTR12', 'RXOIS': 'IS12', 'RXSTG': 'TG31', 'RXSCF': 'CF31', 'RXSTF': 'TF31',
+                             'RXODP': 'DP12', 'RXOCON': 'CON12', 'RXOCF': 'CF12', 'DIP': 'DIP',
+                             'CHRGP': 'CHGRP', 'CF31': 'CF31', 'CTSLOT': 'CTSLOT', 'EMGEM': 'EMGEM', 'EXALO': 'EXALO',
+                             'RILCO': 'RILCO', 'RILT': 'RILT', 'RU': 'RU', 'RU1': 'RU1', 'RU2': 'RU2', 'RX01': 'RX01',
+                             'SAT': 'SAT', 'TF01': 'TF01', 'TF31': 'TF31', 'TG01': 'TG01',
+                             'TG31': 'TG31', 'TRI': 'TRI', 'TRX01': 'TRX01', 'TS01': 'TS01', 'TX01': 'TX01',
+                             'TX12': 'TX12', 'TS12': 'TS12', 'TRX12': 'TRX12', 'TG12': 'TG12', 'TF12': 'TF12',
+                             'RX12': 'RX12', 'MCTR12': 'MCTR12', 'IS12': 'IS12', 'DP12': 'DP12', 'CON12': 'CON12',
+                             'CF12': 'CF12', 'MRU': 'MRU'}
+            singleMoName = moName
+            if singleMoName.find('='): singleMoName = singleMoName.split('=')[0]
+            if len(list(filter(lambda x: singleMoName.lower() == x, cnaMOnameList))) > 0:
+                getMode = 'cna'
+            elif bsmMOnameDict.get(singleMoName, 'NONE') != 'NONE':
+                getMode = 'bsm'
+                if moName.find('=') > -1:
+                    moName = bsmMOnameDict.get(singleMoName) + '=' + moName.split('=')[1]
+                else:
+                    moName = bsmMOnameDict.get(singleMoName)
+            elif singleMoName.lower() == 'hardware' or singleMoName.lower() == 'hw':
+                getMode = 'bsm_hw'
+            elif singleMoName == 'ARNE':
+                getMode = 'arne'
+            else:
+                getMode = 'bcg'
+            subnetwork = ''
+            if len(subnetworkList) > 0:
+                if getMode == 'bcg':
+                    for val in subnetworkList.split(','):
+                        if val.find('=') == -1:
+                            subnetwork = subnetwork + 'SubNetwork=' + ossMainSubnetwork + ',SubNetwork=' + val + ' '
+                        else:
+                            subnetwork = subnetwork + val + ' '
+                    subnetwork = subnetwork[0:len(subnetwork) - 1]
+                else:
+                    subnetwork = subnetworkList
+            moAttr = Second
+            if getMode == 'arne':
+                newDataList = getMoAttributeARNE(moName, moAttr, subnetwork, quietMode, maindir)
+            if getMode == 'bcg':
+                newDataList = getMoAttributeBCG(moName, moAttr, subnetwork, quietMode, maindir)
+            if getMode == 'bsm':
+                newDataList = getMoAttributeBSM(moName, moAttr, subnetwork, quietMode, maindir)
+            if getMode == 'bsm_hw':
+                newDataList = getMoAttributeBSM_HW(moName, moAttr, subnetwork, quietMode, maindir)
+            if getMode == 'cna':
+                newDataList = getMoAttributeCNA(moName, moAttr, subnetwork, quietMode, maindir)
+            if newDataList != 'NULL' and newDataList != 'NEED_RELOG':
+                tempresult, elemenCounter = getMoAttributeFilter(newDataList, moName, moAttr, delimeter, 'and',
+                                                                 attribureCaptionMode, caseIgnore, notEqualMode,
+                                                                 notEqualName)
+                resultDataList = resultDataList + tempresult
+        # ---------------------
+        # after searching
+        if resultDataList != 'NULL':
+            # save output to terminal
+            if noPrintMode == False:
+                if quietMode > 1:
+                    print(">>> PRINT RESULT\n")
+                for j in resultDataList:
+                    print(j)
+                if quietMode > 0:
+                    print('\nFinded ' + str(elemenCounter) + ' elements.\n')
+            # save result to file
+            if saveMode == True:
+                if quietMode > 1:
+                    print(">>> WRITING FILE\n")
+                if len(from_cli) > 4:
+                    fileName = from_cli[4] + moName + '_' + moAttr + '_' + t + '.txt'
+                else:
+                    fileName = os.getcwd() + '/' + moName + '_' + moAttr + '_' + t + '.txt'
+                try:
+                    file = open(fileName, 'a')
+                    for j in resultDataList:
+                        file.write(j + '\r\n')
+                    file.close()
+                except:
+                    if quietMode > 0:
+                        print(
+                                    'Cant write file! Directory not exist, no write permissions or somethig else...\n' + fileName)
+                else:
+                    if quietMode > 0:
+                        print('Result file is: \n' + fileName + '\n')
+        if quietMode > 1:
+            print('>>>DONE!\n')
+        return True
+    else:
+        getMO_help()
+        return False
+
+
+def getMO_help(mode='h'):
+    if mode == 'h' or mode == 'e' or mode == 'r':
+        print('''getmore is GEt Managed Object Regular Expressions (desined for E/// OSS)
+extended help: getmore h \nregular syntax help: getmore r \n
+usage: getmore [Subnet1:]<MOtype1>[=MOfilter1](,...) <Attribute1>[=Value1](,...) [key] [fileDirectory]\n
+where: <> is mandatory value, [] is optional value, () is optional repeat
+Script parsing data from BCGtool,CNAI,BSM,BSM_HARDWARE; check data and output to terminal or file. Use standart OSS tools. 
+--- Subnet - list of subnetworks (BSC/RNC/eNodeBarea/IPRANarea). Case-sensitive.
+Recommended to use subnet filter for faster response. Accelerate working
+--- MOtype - full name of parsed MO (UtranCell, IPInterface,ExternalGsmCell,icell,RXOTG...).
+--- MOfilter - regular expression filters for MO name values. 
+--- Attribute - regular expression filter for attribute name. "all" reserved for output all attributes.
+--- Value - regular expression filter for attributes value. Use logical "and" between filters. Dont accelerate working.
+"band=1800,dchno=600" mean that only MO with band=1800 and dchno=600 will be printed. Exist reverse mode, where use negative comparsion (only MO where band not equal 1800 and dchno not equal 600 will be printed).
+--- fileDirectory - directory, where result file will be saved. By default file saved to current user directory. Use with "f" key.
+keys: "f" will save result to file.
+      "r" reverse attribute value comparison mode. It is mean, will be printed only MO where attribute value not equal to input value.
+      "R" reverse MOfilter comparison mode. It is mean, will be printed only MO with name not equal to MOfilter.
+      "b" will not ignore case in regular expression.
+      "p" will switch off printing result to terminal.
+      "v" verbose information mode, show additional info.
+      "m" mute mode, output only result.  
+      "c" CSV mode, output with ";" as delimeter.  
+      "n" attribute name mode, each printed attribute value have attrbute name.
+    ''')
+    if mode == 'e':
+        print('''    EXTENDED HELP 
+"getmore" is GEt Managed Object Regular Expressions
+by ilya shevchenko 
+Note: for temporary files, script create directory "tempfile_getMO" in user home folder.
+Note: getmore script automaticaly switch between BCGtool,CNAI,BSM and BSM_HARDWARE mode, depending on MOtype:
+BCGtool is all about CPP node: NodeB,eNodeB,RNC,TCU and more... 
+CNAI is all about GSM radio: cell(icell), handovers(nrel,unrel), channel group, etc...
+BSM is all about GSM sites: RXOTG and subbord object (TRX,TX,RX...)
+ARNE is all about OSS topology. Subnetworks mean typo of element (RNC,TCU,CELLO...)
+BSM_HARDWARE is all about GSM sites hardware: RRU/DU type,serial, etc...
+--- by default use BCGtool mode.
+--- for CNA mode reserved MOtype: BSC,bsc,MSC,msc,RNC,rnc,FOREIGN_CELL,foreign_cell,FCELL,fcell,FC,fc,INTERNAL_CELL,internal_cell,ICELL,icell,IC,ic,UTRAN_CELL,utran_cell,UCELL,ucell,UC,uc,INNER_CELL,inner_cell,INNER,inner,OUTER_CELL,outer_cell,OCELL,ocell,OUTER,outer,PRIORITY_PROFILE,priority_profile,PP,pp,SITE,site,TG,tg,OVERLAID_CELL,overlaid_cell,OVERLAID,overlaid,OLCELL,olcell,OL,ol,CHANNEL_GROUP,channel_group,CHGR,chgr,NREL,nrel,UTRAN_NREL,utran_nrel,UNREL,unrel,EXTERNAL_CELL,external_cell,ECELL,ecell,EC,ec,UTRAN_EXTERNAL_CELL,utran_external_cell,UECELL,uecell,UEC,uec.
+--- for BSM mode reserved MOtype: BSMBSC,PSTU,SCGR,RXOTX,RXOTS,RXOTRX,RXOTG,RXOTF,RXSTG,RXSTF,RXORX,RXOMCTR,RXOIS,RXODP,RXOCON,RXOCF,MRU,DIP,CHRGP,CF31,CTSLOT,EMGEM,EXALO,RILCO,RILT,RU,RU1,RU2,RX01,SAT,TF01,TF31,TG01,TG12,TG31,TRI,TRX01,TS01,TX01,TX12,TS12,TRX12,TG12,TF12,RX12,MCTR12,IS12,DP12,CON12,CF12,MRU.
+--- for BSM_HARDWARE mode reserved MOtype: hw,hardware
+--- for ARNE mode reserved MOtype: ARNE. Warning! Option work only in masterhost mode! ("ssh mashost" first)
+Note: exist additional first argument format - mainSubnet#Subnet:<MOtype1>[=MOfilter1] where mainSubnet - global subnet for BCGtool, by default it is "ONRM_ROOT_MO_R"
+
+1 example: getmore RNCE-SPB031:UtranCell,RNCE-SPB032:UtranCell qRxLevMin,maximumTransmissionPower,lac,cId,uarfcnUl,uarfcnDl,primaryScramblingCode s
+will get seven parameters from all UtranCell in RNCE-SPB031 and RNCE-SPB032, strong mode.
+2 example: getmore IPInterface primaryIP_Address,primarySubNetMask ps
+will get mask and IPaddress from all interfaces in all TCU, strongmode without terminal printout.
+3 example: getmore ExternalGsmCell lac,bcc,ncc,bcchFrequency,cellIdentity 
+will get lac,ncc,bcc,cId from ExternalGsmCell in OSS, .
+4 example: getmore M3uAssociation=iur remote nf
+will get remoteIpAddress1,remoteIpAddress1,remotePortNumber from M3uAssociation with name, contained "iur" in OSS without attribute caption with file output.
+5 example: getmore EKT328:icell BCCHNO,BCC,NCC,LAC,CI
+will get all BCCHNO,BCC,NCC,LAC,CI from all GSM internal cell on EKT328.
+6 example: getmore chgr band=1800,dchno
+will get DCHNO for CHGR with BAND=1800 in OSS.
+7 example: getmore hardware type=mctr,mo=665
+will find hardware data for MCTR in TG=665
+8 example: getmore RXOTG scgr,site,swveract,cell,chgr
+will find data about RXOTG, including connected cell and software
+9 example: getmore SCGR mode,scgrss.scgr,pstuname
+will get info about SCGR
+10 example: getmore TCU02:ARNE ipAddress
+will get info about OaM ipaddress from all TCU
+
+
+''')
+    if mode == 'r':
+        print('''    REGULAR EXPRESSION GUIDE
+    Use not case-sensesetive mode. Regular expression with \,$,{,},[,]... symbols must be enclosed in quotation marks
+    Example:
+    getmore utrancell=CP5998 uarfcndl - right
+    getmore utrancell=CP.* uarfcndl - right
+    getmore utrancell=CP5998_\d uarfcndl - wrong
+    getmore utrancell='CP5998_\d' uarfcndl - right
+    getmore utrancell='CP5998_[1|4]' uarfcndl - right
+    
+    A regular expression (or RE) specifies a set of strings that matches it; the functions in this module let you check if a particular string matches a given regular expression (or if a given regular expression matches a particular string, which comes down to the same thing).
+    Regular expressions can be concatenated to form new regular expressions; if A and B are both regular expressions, then AB is also a regular expression. In general, if a string p matches A and another string q matches B, the string pq will match AB. This holds unless A or B contain low precedence operations; boundary conditions between A and B; or have numbered group references. Thus, complex expressions can easily be constructed from simpler primitive expressions like the ones described here. For details of the theory and implementation of regular expressions, consult the Friedl book referenced above, or almost any textbook about compiler construction.
+    Some characters, like '|' or '(', are special. Special characters either stand for classes of ordinary characters, or affect how the regular expressions around them are interpreted. Regular expression pattern strings may not contain null bytes, but can specify the null byte using a \\number notation such as "\\x00".
+    Repetition qualifiers (*, +, ?, {m,n}, etc) cannot be directly nested. This avoids ambiguity with the non-greedy modifier suffix ?, and with other modifiers in other implementations. To apply a second repetition to an inner repetition, parentheses may be used. For example, the expression (?:a{6})* matches any multiple of six 'a' characters.
+    The special characters are:
+    - '.'    (Dot.) In the default mode, this matches any character except a newline.
+    - '^'    (Caret.) Matches the start of the string, and in MULTILINE mode also matches immediately after each newline.
+    - '$'    Matches the end of the string or just before the newline at the end of the string, and in MULTILINE mode also matches before a newline. 
+    - '*'    Causes the resulting RE to match 0 or more repetitions of the preceding RE, as many repetitions as are possible.
+    - '+'    Causes the resulting RE to match 1 or more repetitions of the preceding RE.
+    - '?'    Causes the resulting RE to match 0 or 1 repetitions of the preceding RE.
+    - {m}    Specifies that exactly m copies of the previous RE should be matched; fewer matches cause the entire RE not to match.
+    - {m,n}    Causes the resulting RE to match from m to n repetitions of the preceding RE, attempting to match as many repetitions as possible.
+    - {m,n}?    Causes the resulting RE to match from m to n repetitions of the preceding RE, attempting to match as few repetitions as possible.
+    - '\\'    Either escapes special characters (permitting you to match characters like '*', '?', and so forth), or signals a special sequence; special sequences are discussed below.
+    - []    Used to indicate a set of characters. 
+    - '|'    A|B, where A and B can be arbitrary REs, creates a regular expression that will match either A or B. 
+    - (...)    Matches whatever regular expression is inside the parentheses, and indicates the start and end of a group; 
+    - \\number    Matches the contents of the group of the same number. Groups are numbered starting from 1. For example, (.+) \\1 matches 'the the' or '55 55', but not 'thethe' (note the space after the group). This special sequence can only be used to match one of the first 99 groups. If the first digit of number is 0, or number is 3 octal digits long, it will not be interpreted as a group match, but as the character with octal value number. Inside the '[' and ']' of a character class, all numeric escapes are treated as characters.
+    - \\A    Matches only at the start of the string.
+    - \\b    Matches the empty string, but only at the beginning or end of a word.
+    - \\B    Matches the empty string, but only when it is not at the beginning or end of a word.
+    - \\d    Matches any decimal digit; this is equivalent to [0-9].
+    - \\D    Matches any character which is not a Unicode decimal digit. This is the opposite of \\d.
+    - \\s    Matches characters considered whitespace in the ASCII character set; this is equivalent to [ \\t\\n\\r\\f\\v].
+    - \\S    Matches any character which is not a Unicode whitespace character. 
+    - \\w    Matches characters considered alphanumeric in the ASCII character set; this is equivalent to [a-zA-Z0-9_].
+    - \\W    Matches any character which is not a Unicode word character. This is the opposite of \\w. 
+    - \\Z    Matches only at the end of the string.
+    ''')
+    if mode == 'autorization fail':
+        print('''
+    OSS AUTORIZATION FAIL
+    PLEASE MAKE RELOGIN
+    IF DOES NOT HELP - YOU NEED ADDITIONAL PERMISSION FOR USE bcgtool, cnai, bsm_export, bsm_hardware_export
+    ''')
+
+    return True
+
+
+getMO(ossMainSubnetwork)
