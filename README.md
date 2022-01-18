@@ -1,12 +1,6 @@
 # getmore
 getmore is GEt Managed Object Regular Expressions (desined for E/// OSS)
 
-extended help: getmore h 
-
-regular syntax help: getmore r 
-
-usage: 
-
     getmore [Subnet1:]<MOtype1>[=MOfilter1](,...) <Attribute1>[=Value1](,...) [key] [fileDirectory]
       
 where: <> is mandatory value, [] is optional value, () is optional repeat
