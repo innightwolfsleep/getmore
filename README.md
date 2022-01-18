@@ -39,6 +39,11 @@ keys: "f" will save result to file.
 "c" CSV mode, output with ";" as delimeter.  
       
 "n" attribute name mode, each printed attribute value have attrbute name.
+
+
+
+
+EXAMPLES:
       
     getmore RNC1:UtranCell,RNC2:UtranCell qRxLevMin,maximumTransmissionPower,lac,cId,uarfcnUl,uarfcnDl,primaryScramblingCode s
       
