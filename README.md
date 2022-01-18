@@ -49,7 +49,7 @@ EXAMPLES:
       
 will get seven parameters from all UtranCell in RNC1 and RNC2, strong mode.
 
-  getmore IPInterface primaryIP_Address,primarySubNetMask ps
+    getmore IPInterface primaryIP_Address,primarySubNetMask ps
       
 will get mask and IPaddress from all interfaces in all TCU, strongmode without terminal printout.
 
