@@ -1,5 +1,5 @@
 # getmore
-getmore is GEt Managed Object Regular Expressions (desined for E/// OSS)
+getmore is GEt Managed Object Regular Expressions (desined for E/// OSS, old OaM platform)
 
     getmore [Subnet1:]<MOtype1>[=MOfilter1](,...) <Attribute1>[=Value1](,...) [key] [fileDirectory]
       
